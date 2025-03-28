@@ -55,10 +55,18 @@
   :type 'integer
   :safe 'integerp)
 
+(defcustom cg-context-indent-offset (* 2 cg-indent-offset)
+  "Indent size for contextual tests."
+  :type 'integer
+  :safe 'integerp)
+
 (defvar cg--treesit-indent-rules
   '((cg
-     ((parent-is "rule_with") parent-bol cg-indent-offset)
-     ((parent-is "list") parent-bol cg-indent-offset)))
+      ((and (parent-is "rule_with") (node-is "rule.*")) parent-bol cg-indent-offset)
+      ((match "}" "rule_with") parent-bol 0)
+      ((parent-is "rule.*") parent-bol cg-context-indent-offset)
+      ((parent-is "list") parent-bol cg-indent-offset)
+      ((parent-is "set") parent-bol cg-indent-offset)))
   "Tree-sitter indentation rules for `cg-mode'.")
 
 (defun cg--treesit-defun-name (node)
@@ -72,65 +80,90 @@ Return nil if there is no name or if NODE is not a defun node."
 
 (defvar cg--treesit-settings
   (treesit-font-lock-rules
-   :feature 'comment
-   :language 'cg
-   '((comment) @font-lock-comment-face)
+    ; LEVEL 1
+    :feature 'comment
+    :language 'cg
+    '((comment) @font-lock-comment-face)
 
-   :feature 'string
-   :language 'cg
-   '(((qtag) @font-lock-string-face))
+    :feature 'keyword
+    :language 'cg
+    '([(END)
+        (LIST) (SET)
+        (ANCHOR)
+        (IF)
+        (TARGET)
+        (EXCEPT)
+        (BEFORE) (AFTER)
+        (TO) (FROM)
+        (WITHCHILD) (NOCHILD)
+        (WITH)
+        (ONCE) (ALWAYS)
+        (TEMPLATE)
+        ] @font-lock-keyword-face)
 
-   :feature 'keyword
-   :language 'cg
-   '([(END)
-      (LIST) (SET)
-      (ANCHOR)
-      (IF)
-      (TARGET)
-      (EXCEPT)
-      (BEFORE) (AFTER)
-      (TO) (FROM)
-      (WITHCHILD) (NOCHILD)
-      (WITH)
-      (ONCE) (ALWAYS)
-      (TEMPLATE)
-      ] @font-lock-keyword-face)
+    :feature 'rule
+    :language 'cg
+    '([
+        (ruletype)
+        (ruletype_substitute_etc)
+        (ruletype_parentchild)
+        (ruletype_relation) (ruletype_relations)
+        (ruletype_map_etc)
+        (ruletype_addcohort) (ruletype_mergecohorts) (ruletype_copycohort)
+        (ruletype_move) (ruletype_switch)
+        (ruletype_external)
+        (ruletype_with)
+        ] @font-lock-function-call-face)
 
-   :feature 'constant
-   :language 'cg
-   '([(special_list_name)
-      (STATIC_SETS)
-      (MAPPING_PREFIX)
-      (SUBREADINGS) (LTR) (RTL)
-      (OPTIONS)
-      (LIST_TAGS) (STRICT_TAGS) (PARENTHESES)
-      ] @font-lock-constant-face)
+    :feature 'constant
+    :language 'cg
+    '([(special_list_name)
+        (STATIC_SETS)
+        (MAPPING_PREFIX)
+        (SUBREADINGS) (LTR) (RTL)
+        (OPTIONS)
+        (LIST_TAGS) (STRICT_TAGS) (PARENTHESES)
+        ] @font-lock-builtin-face)
 
-   :feature 'variable
-   :language 'cg
-   '((setname) @font-lock-variable-name-face)
+    ; LEVEL 2
+    :feature 'variable
+    :language 'cg
+    '(
+       (setname) @font-lock-variable-use-face
+       (inlineset_single (taglist (ntag) @font-lock-constant-face))
+       )
 
-   :feature 'operator
-   :language 'cg
-   '([(eq) (pluseq)
-      ] @font-lock-operator-face)
+    :feature 'context
+    :language 'cg
+    '((contextpos) @font-lock-number-face)
 
-   :feature 'delimiter
-   :language 'cg
-   '((semicolon) @font-lock-delimiter-face)
+    :feature 'bracket
+    :language 'cg
+    '((["(" ")" "[" "]" "{" "}"]) @font-lock-bracket-face)
 
-   :feature 'bracket
-   :language 'cg
-   '((["(" ")" "[" "]" "{" "}"]) @font-lock-bracket-face)
+    :feature 'string
+    :language 'cg
+    '(((qtag) @font-lock-string-face))
 
-   :feature 'error
-   :language 'cg
-   '((ERROR) @error))
+    ; LEVEL 3
+    :feature 'delimiter
+    :language 'cg
+    '((semicolon) @font-lock-delimiter-face)
+
+    :feature 'operator
+    :language 'cg
+    '([(eq) (pluseq)
+        (set_op)
+        ] @font-lock-operator-face)
+
+    :feature 'error
+    :language 'cg
+    '((ERROR) @error))
   "Tree-sitter font-lock settings for `cg-mode'.")
 
 ;;;###autoload
 (define-derived-mode cg-mode prog-mode "CG"
-  "Major mode for editing apertium-recursive .cg-files.
+  "Major mode for editing Constraint Grammar .cg3 files.
 CG-mode provides the following specific keyboard key bindings:
 
 \\{cg-mode-map}"
@@ -142,18 +175,13 @@ CG-mode provides the following specific keyboard key bindings:
     ;; Tree-sitter specific setup.
     (treesit-parser-create 'cg)
     (setq-local treesit-simple-indent-rules cg--treesit-indent-rules)
-    ;(setq-local treesit-defun-type-regexp "reduce_rule_group")
+    (setq-local treesit-defun-type-regexp "list\|set")
     (setq-local treesit-defun-name-function #'cg--treesit-defun-name)
     (setq-local treesit-font-lock-settings cg--treesit-settings)
     (setq-local treesit-font-lock-feature-list
-                '((selector comment query keyword function)
-                  (property constant string weight)
-                  (error variable function operator bracket)))
-    (setq-local treesit-simple-imenu-settings
-                `(( "Reduction" ,(rx bos "reduce_rule_group" eos)
-                    nil nil)
-                  ( "Attribute" ,(rx bos "attr_rule" eos)
-                    nil nil)))
+                '((comment keyword rule constant)
+                  (variable context bracket string)
+                  (delimiter operator error)))
     (treesit-major-mode-setup)))
 
 (defun cg-install-tree-sitter ()
