@@ -60,10 +60,26 @@
   :type 'integer
   :safe 'integerp)
 
+(defun cg--prev-is-bracket (node parent bol)
+  (cl-labels
+    ((check (n)
+       (let ((p (treesit-node-prev-sibling n)))
+         (when p
+           (or (string-equal (treesit-node-type p) "{") (check p))))))
+    (when (or (string-equal (treesit-node-type parent) "rule_with")
+                                        ; not sure where ERROR will show up,
+                                        ; so this doesn't always work
+            (and (string-equal (treesit-node-type parent) "ERROR")
+              (string-equal
+                (treesit-node-type (treesit-node-child parent 1))
+                "ruletype_with")))
+      (or (not node) (check node)))))
+
 (defvar cg--treesit-indent-rules
   '((cg
-      ((and (parent-is "rule_with") (node-is "rule.*")) parent-bol cg-indent-offset)
+      ((node-is "section_header") parent-bol 0)
       ((match "}" "rule_with") parent-bol 0)
+      (cg--prev-is-bracket parent-bol cg-indent-offset)
       ((parent-is "rule.*") parent-bol cg-context-indent-offset)
       ((parent-is "list") parent-bol cg-indent-offset)
       ((parent-is "set") parent-bol cg-indent-offset)))
