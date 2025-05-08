@@ -99,6 +99,7 @@ Return nil if there is no name or if NODE is not a defun node."
         (WITH)
         (ONCE) (ALWAYS)
         (TEMPLATE)
+        (section_header)
         ] @font-lock-keyword-face)
 
     :feature 'rule
@@ -130,12 +131,12 @@ Return nil if there is no name or if NODE is not a defun node."
     :language 'cg
     '(
        (setname) @font-lock-variable-use-face
-       (inlineset_single (taglist (ntag) @font-lock-constant-face))
+       (inlineset_single (taglist (tag (ntag) @font-lock-constant-face)))
        )
 
     :feature 'context
     :language 'cg
-    '((contextpos) @font-lock-number-face)
+    '((contextpos) @font-lock-builtin-face)
 
     :feature 'bracket
     :language 'cg
@@ -144,6 +145,10 @@ Return nil if there is no name or if NODE is not a defun node."
     :feature 'string
     :language 'cg
     '(((qtag) @font-lock-string-face))
+
+    :feature 'ruleflag
+    :language 'cg
+    '((ruleflag_name) @font-lock-type-face)
 
     ; LEVEL 3
     :feature 'delimiter
@@ -180,7 +185,7 @@ CG-mode provides the following specific keyboard key bindings:
     (setq-local treesit-font-lock-settings cg--treesit-settings)
     (setq-local treesit-font-lock-feature-list
                 '((comment keyword rule constant)
-                  (variable context bracket string)
+                  (variable context bracket string ruleflag)
                   (delimiter operator error)))
     (treesit-major-mode-setup)))
 
