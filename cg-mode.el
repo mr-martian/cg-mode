@@ -243,9 +243,24 @@ CG-mode provides the following specific keyboard key bindings:
     (xref--push-markers)
     (goto-char match)))
 
+(defun cg-mode-insert-bracket ()
+  (interactive)
+  (let ((p (point)))
+    (insert "{")
+    (let ((n (treesit-node-at p)))
+      (cl-labels
+        ((after-with (n) (or (string-equal (treesit-node-type n)
+                               "ruletype_with")
+                           (after-with (treesit-node-prev-sibling n)))))
+        (when (after-with n)
+          (save-excursion (insert "\n} ;"))
+          (insert "\n")
+          (indent-for-tab-command))))))
+
 ;;; Keybindings --------------------------------------------------------------
 (define-key cg-mode-map (kbd "M-.") #'cg-mode-goto-definition)
 (define-key cg-mode-map (kbd "M-,") #'pop-to-mark-command)
+(define-key cg-mode-map (kbd "{") #'cg-mode-insert-bracket)
 
 ;;; Run hooks -----------------------------------------------------------------
 (run-hooks 'cg-mode-load-hook)
